@@ -7,7 +7,15 @@ import socket
 import subprocess
 import sys
 import time
+import warnings
 from typing import Iterable
+
+warnings.filterwarnings(
+    "ignore",
+    category=Warning,
+    module=r"urllib3(\..*)?",
+    message=r".*urllib3 v2 only supports OpenSSL.*",
+)
 
 import requests
 
