@@ -12,9 +12,7 @@ from typing import Iterable
 
 warnings.filterwarnings(
     "ignore",
-    category=Warning,
-    module=r"urllib3(\..*)?",
-    message=r".*urllib3 v2 only supports OpenSSL.*",
+    message=r"urllib3 v2 only supports OpenSSL 1\.1\.1\+.*",
 )
 
 import requests
