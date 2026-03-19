@@ -2,6 +2,8 @@ import pathlib
 import sys
 import types
 
+import pytest
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
 fake_requests = types.ModuleType("requests")
@@ -182,29 +184,73 @@ def test_hostname_fallback_when_device_name_empty(monkeypatch):
     assert "Host: host-1" in calls["message"]
 
 
-def test_missing_credentials_blocks_execution_before_command(monkeypatch, capsys):
-    def fake_run(cmd, shell):
-        raise AssertionError("subprocess.run should not be called when credentials are missing")
+@pytest.mark.parametrize(
+    ("token", "user", "expect_error"),
+    [
+        (None, "user", True),
+        ("token", None, True),
+        ("", "user", True),
+        ("token", "", True),
+        ("   ", "user", False),
+        ("token", "   ", False),
+        ("token", "user", False),
+    ],
+)
+def test_validate_required_credentials_cases(monkeypatch, token, user, expect_error):
+    if token is None:
+        monkeypatch.delenv("PING_ME_PUSHOVER_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", token)
 
-    monkeypatch.delenv("PING_ME_PUSHOVER_TOKEN", raising=False)
-    monkeypatch.delenv("PING_ME_PUSHOVER_USER", raising=False)
+    if user is None:
+        monkeypatch.delenv("PING_ME_PUSHOVER_USER", raising=False)
+    else:
+        monkeypatch.setenv("PING_ME_PUSHOVER_USER", user)
+
+    result = cli.validate_required_credentials()
+    if expect_error:
+        assert result is not None
+        assert "missing PING_ME_PUSHOVER_TOKEN or PING_ME_PUSHOVER_USER" in result
+    else:
+        assert result is None
+
+
+@pytest.mark.parametrize(
+    ("token", "user", "expected_rc", "should_run"),
+    [
+        (None, "user", 2, False),
+        ("token", None, 2, False),
+        ("", "user", 2, False),
+        ("token", "", 2, False),
+        ("   ", "user", 0, True),
+        ("token", "   ", 0, True),
+        ("token", "user", 0, True),
+    ],
+)
+def test_main_precheck_blocks_or_allows_subprocess(monkeypatch, token, user, expected_rc, should_run):
+    run_calls = []
+
+    def fake_run(cmd, shell):
+        run_calls.append((cmd, shell))
+        return types.SimpleNamespace(returncode=0)
+
     monkeypatch.setenv("PING_ME_NOTIFY", "none")
     monkeypatch.setattr(cli.subprocess, "run", fake_run)
 
-    rc = cli.main(["--", "echo", "ok"])
+    if token is None:
+        monkeypatch.delenv("PING_ME_PUSHOVER_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", token)
 
-    captured = capsys.readouterr()
-    assert rc == 2
-    assert "missing PING_ME_PUSHOVER_TOKEN or PING_ME_PUSHOVER_USER" in captured.err
-
-
-def test_missing_user_blocks_execution_before_command(monkeypatch):
-    def fake_run(cmd, shell):
-        raise AssertionError("subprocess.run should not be called when user key is missing")
-
-    monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
-    monkeypatch.delenv("PING_ME_PUSHOVER_USER", raising=False)
-    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    if user is None:
+        monkeypatch.delenv("PING_ME_PUSHOVER_USER", raising=False)
+    else:
+        monkeypatch.setenv("PING_ME_PUSHOVER_USER", user)
 
     rc = cli.main(["--", "echo", "ok"])
-    assert rc == 2
+
+    assert rc == expected_rc
+    if should_run:
+        assert run_calls == [(["echo", "ok"], False)]
+    else:
+        assert run_calls == []
