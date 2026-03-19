@@ -22,6 +22,26 @@ sys.modules.setdefault("requests", fake_requests)
 import ping_me.cli as cli
 
 
+class TestShouldNotify:
+    def test_default_settings(self):
+        assert cli.should_notify("success", None) is True
+        assert cli.should_notify("success", "") is True
+        assert cli.should_notify("success", "all") is True
+        assert cli.should_notify("success", "none") is False
+
+    def test_explicit_event_list(self):
+        for event in ("success", "failure", "interrupt"):
+            assert cli.should_notify(event, "success,failure,interrupt") is True
+        assert cli.should_notify("success", "success , failure") is True
+        assert cli.should_notify("failure", "success , failure") is True
+        assert cli.should_notify("interrupt", "success , failure") is False
+
+    def test_unknown_tokens(self):
+        assert cli.should_notify("success", "foo") is False
+        assert cli.should_notify("success", "success,foo") is True
+        assert cli.should_notify("failure", "success,foo") is False
+
+
 def test_parse_requires_separator():
     try:
         cli.parse_command(["echo", "hi"])
@@ -208,3 +228,89 @@ def test_missing_user_blocks_execution_before_command(monkeypatch):
 
     rc = cli.main(["--", "echo", "ok"])
     assert rc == 2
+
+
+class TestCliNotifyDispatch:
+    def test_none_suppresses_all_notifications(self, monkeypatch):
+        post_calls = {"count": 0}
+
+        def fake_post(url, data, timeout):
+            post_calls["count"] += 1
+            raise AssertionError("notification should be suppressed for notify=none")
+
+        monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+        monkeypatch.setenv("PING_ME_PUSHOVER_USER", "user")
+        monkeypatch.setenv("PING_ME_NOTIFY", "none")
+        monkeypatch.setattr(cli.requests, "post", fake_post)
+
+        cli.send_notification("success", ["echo", "ok"], 0, 0.1)
+        cli.send_notification("failure", ["false"], 1, 0.1)
+        cli.send_notification("interrupt", ["sleep", "1"], 130, 0.1)
+
+        assert post_calls["count"] == 0
+
+    def test_list_only_notifies_matching_events(self, monkeypatch):
+        events = []
+
+        def fake_post(url, data, timeout):
+            events.append(data["message"].splitlines()[0])
+
+            class Resp:
+                def raise_for_status(self):
+                    return None
+
+            return Resp()
+
+        monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+        monkeypatch.setenv("PING_ME_PUSHOVER_USER", "user")
+        monkeypatch.setenv("PING_ME_NOTIFY", "failure,interrupt")
+        monkeypatch.setattr(cli.requests, "post", fake_post)
+
+        cli.send_notification("success", ["true"], 0, 0.2)
+        cli.send_notification("failure", ["false"], 1, 0.2)
+        cli.send_notification("interrupt", ["sleep", "1"], 130, 0.2)
+
+        assert events == ["❌ Failure", "⚠️ Interrupted"]
+
+    def test_empty_setting_behaves_like_all(self, monkeypatch):
+        calls = {"count": 0}
+
+        def fake_post(url, data, timeout):
+            calls["count"] += 1
+
+            class Resp:
+                def raise_for_status(self):
+                    return None
+
+            return Resp()
+
+        monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+        monkeypatch.setenv("PING_ME_PUSHOVER_USER", "user")
+        monkeypatch.setenv("PING_ME_NOTIFY", "")
+        monkeypatch.setattr(cli.requests, "post", fake_post)
+
+        cli.send_notification("success", ["true"], 0, 0.1)
+        cli.send_notification("failure", ["false"], 1, 0.1)
+        cli.send_notification("interrupt", ["sleep", "1"], 130, 0.1)
+
+        assert calls["count"] == 3
+
+
+class TestRequiredCredentialPrecheck:
+    def test_precheck_still_blocks_command_for_any_notify_setting(self, monkeypatch):
+        run_calls = {"count": 0}
+
+        def fake_run(cmd, shell):
+            run_calls["count"] += 1
+            raise AssertionError("subprocess.run should not be called when credentials are missing")
+
+        monkeypatch.delenv("PING_ME_PUSHOVER_TOKEN", raising=False)
+        monkeypatch.delenv("PING_ME_PUSHOVER_USER", raising=False)
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+        for notify_setting in ("none", "failure", ""):
+            monkeypatch.setenv("PING_ME_NOTIFY", notify_setting)
+            rc = cli.main(["--", "echo", "ok"])
+            assert rc == 2
+
+        assert run_calls["count"] == 0
