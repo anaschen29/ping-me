@@ -1,2 +1,2 @@
 [console_scripts]
-ping-me = ping_me.cli:main
+ping-me = ping_me.entrypoint:main

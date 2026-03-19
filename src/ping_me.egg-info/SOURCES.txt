@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 src/ping_me/__init__.py
 src/ping_me/cli.py
+src/ping_me/entrypoint.py
 src/ping_me.egg-info/PKG-INFO
 src/ping_me.egg-info/SOURCES.txt
 src/ping_me.egg-info/dependency_links.txt
