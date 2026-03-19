@@ -333,7 +333,11 @@ def test_main_precheck_blocks_or_allows_subprocess(monkeypatch, token, user, exp
         monkeypatch.setenv("PING_ME_PUSHOVER_USER", user)
 
     rc = cli.main(["--", "echo", "ok"])
-    assert rc == 2
+    assert rc == expected_rc
+    if should_run:
+        assert run_calls == [(["echo", "ok"], False)]
+    else:
+        assert run_calls == []
 
 
 class TestCliNotifyDispatch:
@@ -405,6 +409,7 @@ class TestCliNotifyDispatch:
 class TestRequiredCredentialPrecheck:
     def test_precheck_still_blocks_command_for_any_notify_setting(self, monkeypatch):
         run_calls = {"count": 0}
+        expected_rc = 2
 
         def fake_run(cmd, shell):
             run_calls["count"] += 1
@@ -417,12 +422,6 @@ class TestRequiredCredentialPrecheck:
         for notify_setting in ("none", "failure", ""):
             monkeypatch.setenv("PING_ME_NOTIFY", notify_setting)
             rc = cli.main(["--", "echo", "ok"])
-            assert rc == 2
+            assert rc == expected_rc
 
         assert run_calls["count"] == 0
-
-    assert rc == expected_rc
-    if should_run:
-        assert run_calls == [(["echo", "ok"], False)]
-    else:
-        assert run_calls == []
