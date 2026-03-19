@@ -61,7 +61,7 @@ def send_notification(event: str, command: list[str], return_code: int, runtime:
     }
     status = status_labels.get(event, event)
     title = os.getenv("PING_ME_TITLE") or "ping-me"
-    hostname = socket.gethostname()
+    hostname = os.getenv("PING_ME_DEVICE_NAME") or socket.gethostname()
     command_text = " ".join(command)
     message = (
         f"{status}\n"
