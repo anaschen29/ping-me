@@ -208,3 +208,66 @@ def test_missing_user_blocks_execution_before_command(monkeypatch):
 
     rc = cli.main(["--", "echo", "ok"])
     assert rc == 2
+
+
+def test_main_success_preserves_return_code_when_notification_send_fails(monkeypatch, capsys):
+    def fake_run(cmd, shell):
+        assert shell is False
+        return types.SimpleNamespace(returncode=0)
+
+    def fake_post(url, data, timeout):
+        raise cli.requests.RequestException("network down")
+
+    monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+    monkeypatch.setenv("PING_ME_PUSHOVER_USER", "user")
+    monkeypatch.setenv("PING_ME_NOTIFY", "all")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli.requests, "post", fake_post)
+
+    rc = cli.main(["--", "echo", "ok"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "failed to send notification" in captured.err
+
+
+def test_main_failure_preserves_return_code_when_notification_send_fails(monkeypatch, capsys):
+    def fake_run(cmd, shell):
+        assert shell is False
+        return types.SimpleNamespace(returncode=7)
+
+    def fake_post(url, data, timeout):
+        raise cli.requests.RequestException("network down")
+
+    monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+    monkeypatch.setenv("PING_ME_PUSHOVER_USER", "user")
+    monkeypatch.setenv("PING_ME_NOTIFY", "failure")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli.requests, "post", fake_post)
+
+    rc = cli.main(["--", "false"])
+
+    captured = capsys.readouterr()
+    assert rc == 7
+    assert "failed to send notification" in captured.err
+
+
+def test_main_interrupt_preserves_return_code_when_notification_send_fails(monkeypatch, capsys):
+    def fake_run(cmd, shell):
+        assert shell is False
+        raise KeyboardInterrupt()
+
+    def fake_post(url, data, timeout):
+        raise cli.requests.RequestException("network down")
+
+    monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+    monkeypatch.setenv("PING_ME_PUSHOVER_USER", "user")
+    monkeypatch.setenv("PING_ME_NOTIFY", "interrupt")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli.requests, "post", fake_post)
+
+    rc = cli.main(["--", "sleep", "1"])
+
+    captured = capsys.readouterr()
+    assert rc == 130
+    assert "failed to send notification" in captured.err
