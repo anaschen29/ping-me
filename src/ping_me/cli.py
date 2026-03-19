@@ -1,19 +1,16 @@
 """CLI for ping-me."""
 
 from __future__ import annotations
-
+import warnings
+from urllib3.exceptions import NotOpenSSLWarning
+warnings.filterwarnings("ignore", category=NotOpenSSLWarning)
 import os
 import socket
 import subprocess
 import sys
 import time
-import warnings
 from typing import Iterable
 
-warnings.filterwarnings(
-    "ignore",
-    message=r"urllib3 v2 only supports OpenSSL 1\.1\.1\+.*",
-)
 
 import requests
 
