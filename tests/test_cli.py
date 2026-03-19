@@ -134,3 +134,49 @@ def test_interrupt_sends_interrupt_notification(monkeypatch):
     rc = cli.main(["--", "sleep", "1"])
     assert rc == 130
     assert "Interrupted" in calls["message"]
+
+
+def test_device_name_env_overrides_hostname(monkeypatch):
+    calls = {}
+
+    def fake_post(url, data, timeout):
+        calls["message"] = data["message"]
+
+        class Resp:
+            def raise_for_status(self):
+                return None
+
+        return Resp()
+
+    monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+    monkeypatch.setenv("PING_ME_PUSHOVER_USER", "user")
+    monkeypatch.setenv("PING_ME_DEVICE_NAME", "my-laptop")
+    monkeypatch.setattr(cli.requests, "post", fake_post)
+    monkeypatch.setattr(cli.socket, "gethostname", lambda: "host-1")
+
+    cli.send_notification("success", ["echo", "ok"], 0, 1.2)
+
+    assert "Host: my-laptop" in calls["message"]
+
+
+def test_hostname_fallback_when_device_name_empty(monkeypatch):
+    calls = {}
+
+    def fake_post(url, data, timeout):
+        calls["message"] = data["message"]
+
+        class Resp:
+            def raise_for_status(self):
+                return None
+
+        return Resp()
+
+    monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+    monkeypatch.setenv("PING_ME_PUSHOVER_USER", "user")
+    monkeypatch.setenv("PING_ME_DEVICE_NAME", "")
+    monkeypatch.setattr(cli.requests, "post", fake_post)
+    monkeypatch.setattr(cli.socket, "gethostname", lambda: "host-1")
+
+    cli.send_notification("success", ["echo", "ok"], 0, 1.2)
+
+    assert "Host: host-1" in calls["message"]
