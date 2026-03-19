@@ -38,7 +38,7 @@ The `--` separator is required. Everything after `--` is executed with `subproce
 Install test tooling with:
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -r tests/requirements.txt
 ```
 
 Run tests with:
@@ -71,3 +71,6 @@ PING_ME_PUSHOVER_TOKEN=... PING_ME_PUSHOVER_USER=... ping-me -- echo ok
 # override the device/host name included in the notification
 PING_ME_DEVICE_NAME="work-macbook" PING_ME_PUSHOVER_TOKEN=... PING_ME_PUSHOVER_USER=... ping-me -- echo ok
 ```
+
+
+Short note: test-only dependencies are kept in `tests/requirements.txt` so root requirements stay focused on runtime installs.
