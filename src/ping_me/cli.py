@@ -46,7 +46,7 @@ def validate_required_credentials() -> str | None:
     user = os.getenv("PING_ME_PUSHOVER_USER")
     if token and user:
         return None
-    return "missing PING_ME_PUSHOVER_TOKEN or PING_ME_PUSHOVER_USER"
+    return "missing PING_ME_PUSHOVER_TOKEN or PING_ME_PUSHOVER_USER. Please set those environment variables!!"
 
 
 def send_notification(event: str, command: list[str], return_code: int, runtime: float) -> None:
