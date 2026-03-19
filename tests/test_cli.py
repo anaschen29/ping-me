@@ -2,6 +2,8 @@ import pathlib
 import sys
 import types
 
+import pytest
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
 fake_requests = types.ModuleType("requests")
@@ -91,6 +93,71 @@ def test_main_failure_code_is_preserved(monkeypatch):
     rc = cli.main(["--", "false"])
     assert rc == 7
     assert notified["called"] is True
+
+
+@pytest.mark.parametrize(
+    ("command", "return_code", "runtime_seconds", "event", "run_payload"),
+    [
+        (["echo", "ok"], 0, 0.02, "success", {}),
+        (["sh", "-c", "exit 3"], 3, 0.03, "failure", {}),
+        (["sleep", "0.1"], 0, 0.1, "success", {}),
+        (["cmd with spaces", "arg=hello world", "symbols:!@#$%^&*()[]{}"], 4, 0.05, "failure", {}),
+        (
+            ["python", "-c", "print('noise')"],
+            9,
+            0.04,
+            "failure",
+            {"stdout": "out" * 5000, "stderr": "err" * 5000},
+        ),
+    ],
+)
+def test_main_parametrized_command_outcomes(
+    monkeypatch,
+    command,
+    return_code,
+    runtime_seconds,
+    event,
+    run_payload,
+):
+    calls = {}
+
+    def fake_run(cmd, shell):
+        assert shell is False
+        assert cmd == command
+        return types.SimpleNamespace(returncode=return_code, **run_payload)
+
+    def fake_post(url, data, timeout):
+        calls["url"] = url
+        calls["data"] = data
+        calls["timeout"] = timeout
+
+        class Resp:
+            def raise_for_status(self):
+                return None
+
+        return Resp()
+
+    monotonic_values = iter([100.0, 100.0 + runtime_seconds])
+
+    monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+    monkeypatch.setenv("PING_ME_PUSHOVER_USER", "user")
+    monkeypatch.setenv("PING_ME_NOTIFY", "all")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli.requests, "post", fake_post)
+    monkeypatch.setattr(cli.time, "monotonic", lambda: next(monotonic_values))
+
+    rc = cli.main(["--", *command])
+
+    expected_status = "✅ Success" if event == "success" else "❌ Failure"
+    message = calls["data"]["message"]
+
+    assert rc == return_code
+    assert calls["url"] == cli.PUSHOVER_URL
+    assert calls["timeout"] == 10
+    assert expected_status in message
+    assert f"Exit code: {return_code}" in message
+    assert f"Command: {' '.join(command)}" in message
+    assert "Runtime:" in message
 
 
 def test_notify_filter_can_disable(monkeypatch):
