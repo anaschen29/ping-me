@@ -40,6 +40,15 @@ def should_notify(event: str, setting: str | None) -> bool:
     return event in selected
 
 
+def validate_required_credentials() -> str | None:
+    """Return an error message when required notification credentials are missing."""
+    token = os.getenv("PING_ME_PUSHOVER_TOKEN")
+    user = os.getenv("PING_ME_PUSHOVER_USER")
+    if token and user:
+        return None
+    return "missing PING_ME_PUSHOVER_TOKEN or PING_ME_PUSHOVER_USER"
+
+
 def send_notification(event: str, command: list[str], return_code: int, runtime: float) -> None:
     """Send a pushover message if configuration and settings allow it."""
     if not should_notify(event, os.getenv("PING_ME_NOTIFY")):
@@ -101,6 +110,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     except ValueError as exc:
         print(f"ping-me: {exc}", file=sys.stderr)
         print("usage: ping-me -- <command> [args ...]", file=sys.stderr)
+        return 2
+
+    credential_error = validate_required_credentials()
+    if credential_error:
+        print(f"ping-me: {credential_error}", file=sys.stderr)
         return 2
 
     start = time.monotonic()

@@ -180,3 +180,31 @@ def test_hostname_fallback_when_device_name_empty(monkeypatch):
     cli.send_notification("success", ["echo", "ok"], 0, 1.2)
 
     assert "Host: host-1" in calls["message"]
+
+
+def test_missing_credentials_blocks_execution_before_command(monkeypatch, capsys):
+    def fake_run(cmd, shell):
+        raise AssertionError("subprocess.run should not be called when credentials are missing")
+
+    monkeypatch.delenv("PING_ME_PUSHOVER_TOKEN", raising=False)
+    monkeypatch.delenv("PING_ME_PUSHOVER_USER", raising=False)
+    monkeypatch.setenv("PING_ME_NOTIFY", "none")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    rc = cli.main(["--", "echo", "ok"])
+
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "missing PING_ME_PUSHOVER_TOKEN or PING_ME_PUSHOVER_USER" in captured.err
+
+
+def test_missing_user_blocks_execution_before_command(monkeypatch):
+    def fake_run(cmd, shell):
+        raise AssertionError("subprocess.run should not be called when user key is missing")
+
+    monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+    monkeypatch.delenv("PING_ME_PUSHOVER_USER", raising=False)
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    rc = cli.main(["--", "echo", "ok"])
+    assert rc == 2
