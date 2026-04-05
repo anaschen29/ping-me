@@ -33,6 +33,35 @@ ping-me -- your command here
 
 The `--` separator is required. Everything after `--` is executed with `subprocess.run(..., shell=False)`.
 
+## Python API
+
+You can also send notifications directly from Python:
+
+```python
+from ping_me import notify
+
+notify("epoch done")
+notify("evaluation failed", status="failure", return_code=1)
+```
+
+`notify(...)` supports a non-terminal progress/update status (`notify_progress`), in addition to terminal statuses like `success`, `failure`, and `interrupt`.
+
+### Inherited context in subprocesses
+
+When you run a command through:
+
+```bash
+ping-me --name training -- python train.py
+```
+
+`ping-me` injects run metadata into the child process environment:
+
+- `PING_ME_CONTEXT_ACTIVE=1`
+- `PING_ME_JOB_NAME=<resolved job name>` (when available)
+- `PING_ME_PARENT_COMMAND=<the command text>`
+
+Any deeper subprocesses inherit these variables by default unless a layer intentionally clears or overrides its environment.
+
 ## Development
 
 Install test tooling with:
@@ -58,7 +87,7 @@ Optional:
 
 - `PING_ME_TITLE` (default: `ping-me`)
 - `PING_ME_NOTIFY` (default: `all`)
-  - `all`, `none`, or a comma-separated list like `success,failure,interrupt`
+  - `all`, `none`, `terminal`, or a comma-separated list like `success,failure,interrupt,notify_progress`
 - `PING_ME_DEVICE_NAME` (default: your system hostname from `socket.gethostname()`)
   - Set to any non-empty string to override the host shown in notifications
 

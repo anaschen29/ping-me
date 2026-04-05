@@ -74,7 +74,7 @@ def test_parse_rejects_unknown_options_and_missing_name_value():
 def test_main_success_sends_notification(monkeypatch):
     calls = {}
 
-    def fake_run(cmd, shell):
+    def fake_run(cmd, shell, env):
         assert shell is False
         assert cmd == ["echo", "ok"]
         return types.SimpleNamespace(returncode=0)
@@ -110,7 +110,7 @@ def test_main_success_sends_notification(monkeypatch):
 def test_main_failure_code_is_preserved(monkeypatch):
     notified = {"called": False}
 
-    def fake_run(cmd, shell):
+    def fake_run(cmd, shell, env):
         return types.SimpleNamespace(returncode=7)
 
     def fake_post(url, data, timeout):
@@ -159,7 +159,7 @@ def test_main_parametrized_command_outcomes(
 ):
     calls = {}
 
-    def fake_run(cmd, shell):
+    def fake_run(cmd, shell, env):
         assert shell is False
         assert cmd == command
         return types.SimpleNamespace(returncode=return_code, **run_payload)
@@ -199,7 +199,7 @@ def test_main_parametrized_command_outcomes(
 
 
 def test_notify_filter_can_disable(monkeypatch):
-    def fake_run(cmd, shell):
+    def fake_run(cmd, shell, env):
         return types.SimpleNamespace(returncode=0)
 
     def fake_post(url, data, timeout):
@@ -218,7 +218,7 @@ def test_notify_filter_can_disable(monkeypatch):
 def test_interrupt_sends_interrupt_notification(monkeypatch):
     calls = {"message": None}
 
-    def fake_run(cmd, shell):
+    def fake_run(cmd, shell, env):
         raise KeyboardInterrupt()
 
     def fake_post(url, data, timeout):
@@ -312,7 +312,7 @@ def test_send_notification_prefixes_status_with_job_name(monkeypatch):
 def test_main_passes_job_name_into_notification_message(monkeypatch):
     calls = {}
 
-    def fake_run(cmd, shell):
+    def fake_run(cmd, shell, env):
         return types.SimpleNamespace(returncode=0)
 
     def fake_post(url, data, timeout):
@@ -381,7 +381,7 @@ def test_validate_required_credentials_cases(monkeypatch, token, user, expect_er
 def test_main_precheck_blocks_or_allows_subprocess(monkeypatch, token, user, expected_rc, should_run):
     run_calls = []
 
-    def fake_run(cmd, shell):
+    def fake_run(cmd, shell, env):
         run_calls.append((cmd, shell))
         return types.SimpleNamespace(returncode=0)
 
@@ -477,7 +477,7 @@ class TestRequiredCredentialPrecheck:
         run_calls = {"count": 0}
         expected_rc = 2
 
-        def fake_run(cmd, shell):
+        def fake_run(cmd, shell, env):
             run_calls["count"] += 1
             raise AssertionError("subprocess.run should not be called when credentials are missing")
 
