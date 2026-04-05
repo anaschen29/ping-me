@@ -49,7 +49,13 @@ def validate_required_credentials() -> str | None:
     return "missing PING_ME_PUSHOVER_TOKEN or PING_ME_PUSHOVER_USER. Please set those environment variables!!"
 
 
-def send_notification(event: str, command: list[str], return_code: int, runtime: float) -> None:
+def send_notification(
+    event: str,
+    command: list[str],
+    return_code: int,
+    runtime: float,
+    job_name: str | None = None,
+) -> None:
     """Send a pushover message if configuration and settings allow it."""
     if not should_notify(event, os.getenv("PING_ME_NOTIFY")):
         return
@@ -72,8 +78,9 @@ def send_notification(event: str, command: list[str], return_code: int, runtime:
     title = os.getenv("PING_ME_TITLE") or "ping-me"
     hostname = os.getenv("PING_ME_DEVICE_NAME") or socket.gethostname()
     command_text = " ".join(command)
+    status_line = f"Job {job_name}: {status}" if job_name else status
     message = (
-        f"{status}\n"
+        f"{status_line}\n"
         f"Host: {hostname}\n"
         f"Runtime: {format_runtime(runtime)}\n"
         f"Exit code: {return_code}\n"
@@ -90,26 +97,43 @@ def send_notification(event: str, command: list[str], return_code: int, runtime:
     response.raise_for_status()
 
 
-def parse_command(argv: Iterable[str]) -> list[str]:
-    """Parse command list from argv, requiring a -- separator."""
+def parse_args(argv: Iterable[str]) -> tuple[str | None, list[str]]:
+    """Parse optional CLI flags and command list from argv."""
     args = list(argv)
     if "--" not in args:
         raise ValueError("missing required '--' separator")
     separator = args.index("--")
+
+    option_args = args[:separator]
+    job_name = None
+    idx = 0
+    while idx < len(option_args):
+        arg = option_args[idx]
+        if arg in {"--name", "-n"}:
+            idx += 1
+            if idx >= len(option_args):
+                raise ValueError(f"missing value for '{arg}'")
+            job_name = option_args[idx]
+        elif arg.startswith("--name="):
+            job_name = arg.split("=", 1)[1]
+        else:
+            raise ValueError(f"unknown option '{arg}'")
+        idx += 1
+
     command = args[separator + 1 :]
     if not command:
         raise ValueError("missing command after '--'")
-    return command
+    return job_name, command
 
 
 def main(argv: Iterable[str] | None = None) -> int:
     """CLI entrypoint."""
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     try:
-        command = parse_command(raw_argv)
+        job_name, command = parse_args(raw_argv)
     except ValueError as exc:
         print(f"ping-me: {exc}", file=sys.stderr)
-        print("usage: ping-me -- <command> [args ...]", file=sys.stderr)
+        print("usage: ping-me [--name NAME|-n NAME] -- <command> [args ...]", file=sys.stderr)
         return 2
 
     credential_error = validate_required_credentials()
@@ -130,7 +154,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     runtime = time.monotonic() - start
     try:
-        send_notification(event, command, return_code, runtime)
+        send_notification(event, command, return_code, runtime, job_name=job_name)
     except requests.RequestException as exc:
         print(f"ping-me: failed to send notification: {exc}", file=sys.stderr)
 
