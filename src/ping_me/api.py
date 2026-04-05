@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import os
 
 from ping_me import cli
 
@@ -18,7 +19,13 @@ def notify(
 ) -> None:
     """Send a ping-me notification from Python code."""
     resolved_job_name = cli.resolve_job_name(job_name)
-    command_for_message = command if command is not None else [sys.executable, "-c", "..."]
+    inherited_parent_command = os.environ.get(cli.PING_ME_PARENT_COMMAND)
+    if command is not None:
+        command_for_message = command
+    elif inherited_parent_command:
+        command_for_message = [inherited_parent_command]
+    else:
+        command_for_message = [sys.executable, "-c", "..."]
     try:
         cli.send_notification(
             status,
