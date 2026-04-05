@@ -88,10 +88,10 @@ def send_notification(
 
     normalized_event = normalize_event(event)
     status_labels = {
-        "success": "✅ Succeeded",
-        "failure": "❌ Failed",
-        "interrupt": "⚠️ Interrupted",
-        PROGRESS_EVENT: "🔄 In Progress",
+        "success": "succeeded ✅",
+        "failure": "failed ❌",
+        "interrupt": "interrupted ⚠️ ",
+        PROGRESS_EVENT: "in progress 🔄",
         "warning": "⚠️ Warning",
     }
     status = status_labels.get(normalized_event, normalized_event)
