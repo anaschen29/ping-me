@@ -46,11 +46,29 @@ class TestShouldNotify:
 
 def test_parse_requires_separator():
     try:
-        cli.parse_command(["echo", "hi"])
+        cli.parse_args(["echo", "hi"])
     except ValueError as exc:
         assert "separator" in str(exc)
     else:
         raise AssertionError("expected ValueError")
+
+
+def test_parse_supports_job_name_short_and_long_flags():
+    assert cli.parse_args(["-n", "backup", "--", "echo", "ok"]) == (
+        "backup",
+        ["echo", "ok"],
+    )
+    assert cli.parse_args(["--name=nightly", "--", "echo", "ok"]) == (
+        "nightly",
+        ["echo", "ok"],
+    )
+
+
+def test_parse_rejects_unknown_options_and_missing_name_value():
+    with pytest.raises(ValueError, match="unknown option"):
+        cli.parse_args(["--nope", "--", "echo", "ok"])
+    with pytest.raises(ValueError, match="missing value"):
+        cli.parse_args(["--name", "--", "echo", "ok"])
 
 
 def test_main_success_sends_notification(monkeypatch):
@@ -267,6 +285,54 @@ def test_hostname_fallback_when_device_name_empty(monkeypatch):
     cli.send_notification("success", ["echo", "ok"], 0, 1.2)
 
     assert "Host: host-1" in calls["message"]
+
+
+def test_send_notification_prefixes_status_with_job_name(monkeypatch):
+    calls = {}
+
+    def fake_post(url, data, timeout):
+        calls["message"] = data["message"]
+
+        class Resp:
+            def raise_for_status(self):
+                return None
+
+        return Resp()
+
+    monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+    monkeypatch.setenv("PING_ME_PUSHOVER_USER", "user")
+    monkeypatch.setattr(cli.requests, "post", fake_post)
+
+    cli.send_notification("success", ["echo", "ok"], 0, 1.2, job_name="Nightly Build")
+
+    first_line = calls["message"].splitlines()[0]
+    assert first_line == "Job Nightly Build: ✅ Success"
+
+
+def test_main_passes_job_name_into_notification_message(monkeypatch):
+    calls = {}
+
+    def fake_run(cmd, shell):
+        return types.SimpleNamespace(returncode=0)
+
+    def fake_post(url, data, timeout):
+        calls["message"] = data["message"]
+
+        class Resp:
+            def raise_for_status(self):
+                return None
+
+        return Resp()
+
+    monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+    monkeypatch.setenv("PING_ME_PUSHOVER_USER", "user")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli.requests, "post", fake_post)
+
+    rc = cli.main(["--name", "Deploy Job", "--", "echo", "ok"])
+
+    assert rc == 0
+    assert calls["message"].splitlines()[0] == "Job Deploy Job: ✅ Success"
 
 
 @pytest.mark.parametrize(
