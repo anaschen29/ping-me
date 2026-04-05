@@ -10,7 +10,7 @@ from ping_me import cli
 def notify(
     message: str,
     *,
-    status: str = "info",
+    status: str = cli.PROGRESS_EVENT,
     job_name: str | None = None,
     command: list[str] | None = None,
     return_code: int | None = None,

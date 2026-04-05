@@ -44,7 +44,7 @@ notify("epoch done")
 notify("evaluation failed", status="failure", return_code=1)
 ```
 
-`notify(...)` supports non-terminal event statuses such as `info` and `progress`, in addition to terminal statuses like `success`, `failure`, and `interrupt`.
+`notify(...)` supports a non-terminal progress/update status (`notify_progress`), in addition to terminal statuses like `success`, `failure`, and `interrupt`.
 
 ### Inherited context in subprocesses
 
@@ -87,7 +87,7 @@ Optional:
 
 - `PING_ME_TITLE` (default: `ping-me`)
 - `PING_ME_NOTIFY` (default: `all`)
-  - `all`, `none`, `terminal`, or a comma-separated list like `success,failure,interrupt,info,progress`
+  - `all`, `none`, `terminal`, or a comma-separated list like `success,failure,interrupt,notify_progress`
 - `PING_ME_DEVICE_NAME` (default: your system hostname from `socket.gethostname()`)
   - Set to any non-empty string to override the host shown in notifications
 

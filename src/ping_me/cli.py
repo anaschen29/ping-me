@@ -19,6 +19,7 @@ PING_ME_CONTEXT_ACTIVE = "PING_ME_CONTEXT_ACTIVE"
 PING_ME_JOB_NAME = "PING_ME_JOB_NAME"
 PING_ME_PARENT_COMMAND = "PING_ME_PARENT_COMMAND"
 TERMINAL_EVENTS = {"success", "failure", "interrupt"}
+PROGRESS_EVENT = "notify_progress"
 
 
 def format_runtime(seconds: float) -> str:
@@ -40,12 +41,19 @@ def should_notify(event: str, setting: str | None) -> bool:
         return True
     if raw == "none":
         return False
-    selected = {item.strip() for item in raw.split(",") if item.strip()}
-    if event in selected:
+    normalized_event = normalize_event(event)
+    selected = {normalize_event(item.strip()) for item in raw.split(",") if item.strip()}
+    if normalized_event in selected:
         return True
     if "terminal" in selected and event in TERMINAL_EVENTS:
         return True
     return False
+
+
+def normalize_event(event: str) -> str:
+    """Map legacy event aliases to canonical event names."""
+    aliases = {"info": PROGRESS_EVENT, "progress": PROGRESS_EVENT}
+    return aliases.get(event, event)
 
 
 def validate_required_credentials() -> str | None:
@@ -78,15 +86,15 @@ def send_notification(
         )
         return
 
+    normalized_event = normalize_event(event)
     status_labels = {
         "success": "✅ Success",
         "failure": "❌ Failure",
         "interrupt": "⚠️ Interrupted",
-        "info": "ℹ️ Info",
-        "progress": "🔄 Progress",
+        PROGRESS_EVENT: "🔄 Progress",
         "warning": "⚠️ Warning",
     }
-    status = status_labels.get(event, event)
+    status = status_labels.get(normalized_event, normalized_event)
     title = os.getenv("PING_ME_TITLE") or "ping-me"
     hostname = os.getenv("PING_ME_DEVICE_NAME") or socket.gethostname()
     command_text = " ".join(command) if command else "(none)"
