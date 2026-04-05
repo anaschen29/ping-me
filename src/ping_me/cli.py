@@ -88,17 +88,17 @@ def send_notification(
 
     normalized_event = normalize_event(event)
     status_labels = {
-        "success": "✅ Success",
-        "failure": "❌ Failure",
+        "success": "✅ Succeeded",
+        "failure": "❌ Failed",
         "interrupt": "⚠️ Interrupted",
-        PROGRESS_EVENT: "🔄 Progress",
+        PROGRESS_EVENT: "🔄 In Progress",
         "warning": "⚠️ Warning",
     }
     status = status_labels.get(normalized_event, normalized_event)
     title = os.getenv("PING_ME_TITLE") or "ping-me"
     hostname = os.getenv("PING_ME_DEVICE_NAME") or socket.gethostname()
     command_text = " ".join(command) if command else "(none)"
-    status_line = f"Job {job_name}: {status}" if job_name else status
+    status_line = f"{job_name} {status}" if job_name else status
     message_lines = [status_line, f"Host: {hostname}"]
     if runtime is not None:
         message_lines.append(f"Runtime: {format_runtime(runtime)}")
