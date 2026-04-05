@@ -15,6 +15,10 @@ from typing import Iterable
 import requests
 
 PUSHOVER_URL = "https://api.pushover.net/1/messages.json"
+PING_ME_CONTEXT_ACTIVE = "PING_ME_CONTEXT_ACTIVE"
+PING_ME_JOB_NAME = "PING_ME_JOB_NAME"
+PING_ME_PARENT_COMMAND = "PING_ME_PARENT_COMMAND"
+TERMINAL_EVENTS = {"success", "failure", "interrupt"}
 
 
 def format_runtime(seconds: float) -> str:
@@ -37,7 +41,11 @@ def should_notify(event: str, setting: str | None) -> bool:
     if raw == "none":
         return False
     selected = {item.strip() for item in raw.split(",") if item.strip()}
-    return event in selected
+    if event in selected:
+        return True
+    if "terminal" in selected and event in TERMINAL_EVENTS:
+        return True
+    return False
 
 
 def validate_required_credentials() -> str | None:
@@ -51,10 +59,11 @@ def validate_required_credentials() -> str | None:
 
 def send_notification(
     event: str,
-    command: list[str],
-    return_code: int,
-    runtime: float,
+    command: list[str] | None,
+    return_code: int | None,
+    runtime: float | None,
     job_name: str | None = None,
+    detail_message: str | None = None,
 ) -> None:
     """Send a pushover message if configuration and settings allow it."""
     if not should_notify(event, os.getenv("PING_ME_NOTIFY")):
@@ -73,19 +82,24 @@ def send_notification(
         "success": "✅ Success",
         "failure": "❌ Failure",
         "interrupt": "⚠️ Interrupted",
+        "info": "ℹ️ Info",
+        "progress": "🔄 Progress",
+        "warning": "⚠️ Warning",
     }
     status = status_labels.get(event, event)
     title = os.getenv("PING_ME_TITLE") or "ping-me"
     hostname = os.getenv("PING_ME_DEVICE_NAME") or socket.gethostname()
-    command_text = " ".join(command)
+    command_text = " ".join(command) if command else "(none)"
     status_line = f"Job {job_name}: {status}" if job_name else status
-    message = (
-        f"{status_line}\n"
-        f"Host: {hostname}\n"
-        f"Runtime: {format_runtime(runtime)}\n"
-        f"Exit code: {return_code}\n"
-        f"Command: {command_text}"
-    )
+    message_lines = [status_line, f"Host: {hostname}"]
+    if runtime is not None:
+        message_lines.append(f"Runtime: {format_runtime(runtime)}")
+    if return_code is not None:
+        message_lines.append(f"Exit code: {return_code}")
+    message_lines.append(f"Command: {command_text}")
+    if detail_message:
+        message_lines.append(f"Message: {detail_message}")
+    message = "\n".join(message_lines)
 
     payload = {
         "token": token,
@@ -126,6 +140,16 @@ def parse_args(argv: Iterable[str]) -> tuple[str | None, list[str]]:
     return job_name, command
 
 
+def resolve_job_name(explicit_job_name: str | None = None) -> str | None:
+    """Resolve job name from explicit argument first, then inherited env context."""
+    if explicit_job_name:
+        return explicit_job_name
+    inherited = os.getenv(PING_ME_JOB_NAME)
+    if inherited:
+        return inherited
+    return None
+
+
 def main(argv: Iterable[str] | None = None) -> int:
     """CLI entrypoint."""
     raw_argv = list(sys.argv[1:] if argv is None else argv)
@@ -145,7 +169,13 @@ def main(argv: Iterable[str] | None = None) -> int:
     event = "failure"
     return_code = 1
     try:
-        result = subprocess.run(command, shell=False)
+        child_env = os.environ.copy()
+        child_env[PING_ME_CONTEXT_ACTIVE] = "1"
+        child_env[PING_ME_PARENT_COMMAND] = " ".join(command)
+        resolved_job_name = resolve_job_name(job_name)
+        if resolved_job_name:
+            child_env[PING_ME_JOB_NAME] = resolved_job_name
+        result = subprocess.run(command, shell=False, env=child_env)
         return_code = result.returncode
         event = "success" if return_code == 0 else "failure"
     except KeyboardInterrupt:
@@ -154,7 +184,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     runtime = time.monotonic() - start
     try:
-        send_notification(event, command, return_code, runtime, job_name=job_name)
+        send_notification(event, command, return_code, runtime, job_name=resolve_job_name(job_name))
     except requests.RequestException as exc:
         print(f"ping-me: failed to send notification: {exc}", file=sys.stderr)
 
