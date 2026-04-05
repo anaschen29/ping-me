@@ -94,6 +94,50 @@ def test_notify_explicit_job_name_overrides_inherited(monkeypatch):
     assert calls["message"].splitlines()[0] == "Job Explicit Job: 🔄 Progress"
 
 
+def test_notify_inherits_parent_command_when_command_not_provided(monkeypatch):
+    calls = {}
+
+    def fake_post(url, data, timeout):
+        calls["message"] = data["message"]
+
+        class Resp:
+            def raise_for_status(self):
+                return None
+
+        return Resp()
+
+    monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+    monkeypatch.setenv("PING_ME_PUSHOVER_USER", "user")
+    monkeypatch.setenv("PING_ME_NOTIFY", "notify_progress")
+    monkeypatch.setenv(cli.PING_ME_PARENT_COMMAND, "python train.py --epochs 3")
+    monkeypatch.setattr(cli.requests, "post", fake_post)
+
+    notify("epoch done")
+    assert "Command: python train.py --epochs 3" in calls["message"]
+
+
+def test_notify_explicit_command_overrides_inherited_parent_command(monkeypatch):
+    calls = {}
+
+    def fake_post(url, data, timeout):
+        calls["message"] = data["message"]
+
+        class Resp:
+            def raise_for_status(self):
+                return None
+
+        return Resp()
+
+    monkeypatch.setenv("PING_ME_PUSHOVER_TOKEN", "token")
+    monkeypatch.setenv("PING_ME_PUSHOVER_USER", "user")
+    monkeypatch.setenv("PING_ME_NOTIFY", "notify_progress")
+    monkeypatch.setenv(cli.PING_ME_PARENT_COMMAND, "python train.py --epochs 3")
+    monkeypatch.setattr(cli.requests, "post", fake_post)
+
+    notify("epoch done", command=["python", "eval.py"])
+    assert "Command: python eval.py" in calls["message"]
+
+
 def test_main_injects_context_env_for_subprocess(monkeypatch):
     seen_env = {}
 
